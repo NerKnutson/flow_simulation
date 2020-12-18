@@ -6,85 +6,101 @@
 using namespace Eigen;
 using namespace std;
 
-	size_t iterations = 5;
+	size_t iterations = 10000;
 
-	int dim_u = 10;
-	int dim_y = 1;
-	int dim_x = 2;
+	int num_iput = 10;
+	int dim_meas = 1;
+	int dim_stat = 2;
 
-	MatrixXd A(dim_x,dim_x);
-	MatrixXd B(dim_x,dim_y);
+	MatrixXd As(dim_stat,dim_stat);
+	MatrixXd Bs(dim_stat,dim_meas);
+	MatrixXd Cs(dim_meas,dim_stat);
+	MatrixXd Ds(dim_meas,dim_meas);
 
-	MatrixXd C(dim_y,dim_x);
-	MatrixXd D(dim_y,dim_u);
+	MatrixXd Ag(dim_stat,dim_stat);
+	MatrixXd Bg(dim_stat,dim_meas);
+	MatrixXd Cg(dim_meas,dim_stat);
+	MatrixXd Dg(dim_meas,dim_meas);
 
-VectorXd next_u(MatrixXd &x, VectorXd w)
+	MatrixXd Ah(dim_stat,dim_stat);
+	MatrixXd Bh(dim_stat,dim_meas);
+	MatrixXd Ch(dim_meas,dim_stat);
+	MatrixXd Dh(dim_meas,dim_meas);
+
+VectorXd transfer(const MatrixXd A, const MatrixXd B, const MatrixXd C, const MatrixXd D, MatrixXd &state, VectorXd ivec)
 {
-	MatrixXd u(dim_u,1);
+	MatrixXd output(num_iput,1);
 
-	for (int i = 0; i < dim_u; i++)
+	for (int i = 0; i < num_iput; i++)
 	{
-		x.col(i) = A*x.col(i) + B*w(i);
-		u.row(i) = C*x.col(i);
+		output.row(i) = C*state.col(i) + D*ivec(i);	// Computes current output vector component
+		state.col(i) = A*state.col(i) + B*ivec(i);	// Increments state vector
 	}
 
-	return u;
+	return output;
 }
 
 int main()
 {
-	A << 0.5, 0.5,
-		  0.5, 0.5;
+	As << -0.5, 0.25,
+		  0.25, -0.5;
 
-	B << 0.5,
+	Bs << 0.5,
 		  0.5;
 
-	C << 0.5, 0.5;
+	Cs << 0.5, 0.5;
 
-	VectorXd ug(dim_u);
-	VectorXd uh(dim_u);
+	Ds << 0.0;
 
-	MatrixXd xg(dim_x,dim_u);
-	MatrixXd xh(dim_x,dim_u);
+	Ag = Ah = As;
+	Bg = Bh = Bs;
+	Cg = Ch = Cs;
+	Dg = Dh = Ds;
 
-	VectorXd y(dim_u);
+	VectorXd ug(num_iput);
+	VectorXd uh(num_iput);
+
+	MatrixXd xsg(dim_stat,num_iput);
+	MatrixXd xsh(dim_stat,num_iput);
+
+	MatrixXd xg(dim_stat,num_iput);
+	MatrixXd xh(dim_stat,num_iput);
+
+	size_t mic_num = num_iput;
+	VectorXd yg(mic_num);
+	VectorXd yh(mic_num);
 
 	// White Noise vector;
 	default_random_engine generator;
 	normal_distribution<double>* distribution;
-		distribution = new normal_distribution<double>[2*dim_u];
+		distribution = new normal_distribution<double>[2*num_iput];
 
-	VectorXd wg(dim_u);
-	VectorXd wh(dim_u);
-		for (int n = 0; n < dim_u; ++n)
+	VectorXd wg(num_iput);
+	VectorXd wh(num_iput);
+		for (int n = 0; n < num_iput; ++n)
 		{
 			wg(n) = distribution[n](generator);
-			wh(n) = distribution[n + dim_u](generator);
+			wh(n) = distribution[n + num_iput](generator);
 		}
 
 // Correlating noise
 	for (int k = 0; k < iterations; ++k)
 	{
-		ug = next_u(xg, wg);
-		uh = next_u(xh, wh);
+		ug = transfer(As, Bs, Cs, Ds, xsg, wg);
+		uh = transfer(As, Bs, Cs, Ds, xsh, wh);
 
-		/*
-		cout << ug << endl << endl;
-		cout << uh << endl << endl;
-		*/
+		yg = transfer(Ag, Bg, Cg, Dg, xg, ug);
+		yh = transfer(Ah, Bh, Ch, Dh, xh, uh);
 
-		for (int n = 0; n < dim_u; ++n)
+		cout << yg + yh << endl << endl;
+
+		for (int n = 0; n < num_iput; ++n)
 		{
 			wg(n) = distribution[n](generator);
-			wh(n) = distribution[n + dim_u](generator);
+			wh(n) = distribution[n + num_iput](generator);
 		}
 
 	}
-	// How to make structure to hold x's in it?
-
-
-
-
 
 	return 0;
 }
